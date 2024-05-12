@@ -1,0 +1,8 @@
+coloredlogs==15.0.1
+gymnasium==0.29.1
+numpy==1.24.4
+port_for==0.6.3
+py4j==0.10.9.5
+stable_baselines3==2.3.2
+torch==2.3.0
+tqdm==4.65.0

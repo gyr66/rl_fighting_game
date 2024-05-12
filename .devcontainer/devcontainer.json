@@ -1,0 +1,16 @@
+{
+  "name": "Fighting Game Dev Environment",
+  "image": "registry.cn-qingdao.aliyuncs.com/gyr/fighting_game:v1",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "esbenp.prettier-vscode",
+        "ms-vscode-remote.vscode-remote-extensionpack"
+      ]
+    }
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind",
+  "workspaceFolder": "/app",
+  "postCreateCommand": "Xvfb :10 -screen 0 1024x768x16 &"
+}
