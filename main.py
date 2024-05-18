@@ -10,8 +10,14 @@ from model_wrapper import ModelWrapper
 from config import Config
 
 log = logging.getLogger(__name__)
-
+ 
 coloredlogs.install(level="INFO")
+
+import sys
+
+sys.setrecursionlimit(100000)
+
+
 
 def main():
     env = FightingiceEnv()

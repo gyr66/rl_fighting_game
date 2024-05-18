@@ -6,6 +6,7 @@ import time
 from multiprocessing import Pipe
 from threading import Thread
 
+
 import gymnasium
 from gymnasium import error, spaces, utils
 from gymnasium.utils import seeding
@@ -20,7 +21,9 @@ from py4j.java_gateway import (
 from gym_ai import GymAI
 
 # from myenv.ppo_ai import PpoAI
-
+from opponent_pool import OpponentPool
+from stable_baselines3 import DQN
+from opponent import Opponent
 
 def game_thread(env):
     try:
@@ -34,10 +37,11 @@ def game_thread(env):
 class FightingiceEnv(gymnasium.Env):
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, **kwargs):
+    def __init__(self, opponent_pool: OpponentPool, **kwargs):
 
         self.freq_restart_java = 1
         self.java_env_path = os.getcwd()
+        self.opponent = "MctsAi"
 
         if "java_env_path" in kwargs.keys():
             self.java_env_path = kwargs["java_env_path"]
@@ -60,7 +64,7 @@ class FightingiceEnv(gymnasium.Env):
         _actions = "AIR_A AIR_B AIR_D_DB_BA AIR_D_DB_BB AIR_D_DF_FA AIR_D_DF_FB AIR_DA AIR_DB AIR_F_D_DFA AIR_F_D_DFB AIR_FA AIR_FB AIR_UA AIR_UB BACK_JUMP BACK_STEP CROUCH_A CROUCH_B CROUCH_FA CROUCH_FB CROUCH_GUARD DASH FOR_JUMP FORWARD_WALK JUMP NEUTRAL STAND_A STAND_B STAND_D_DB_BA STAND_D_DB_BB STAND_D_DF_FA STAND_D_DF_FB STAND_D_DF_FC STAND_F_D_DFA STAND_F_D_DFB STAND_FA STAND_FB STAND_GUARD THROW_A THROW_B"
         action_strs = _actions.split(" ")  # 40 actions
 
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(144,))
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(145,))
         self.action_space = spaces.Discrete(len(action_strs))
 
         os_name = platform.system()
@@ -115,6 +119,8 @@ class FightingiceEnv(gymnasium.Env):
         self.new_obs = None
         self.win = False
         self.init_frame_data = None
+        self.opponent_pool = opponent_pool
+        
 
     def _start_java_game(self):
         # start game
@@ -212,22 +218,27 @@ class FightingiceEnv(gymnasium.Env):
         self.pipe = server
         # self.p1 = PpoAI(self.gateway, client, False)
         # BEGIN MY CODE
-        self.engine = GymAI(self.gateway, client)
+        self.engine = GymAI(self.gateway, client, self)
         self.p1 = self.engine
         # END MY CODE
         # self.p1 = GymAI(self.gateway, client)
         self.p1_name = self.p1.__class__.__name__
         self.manager.registerAI(self.p1_name, self.p1)
+        
+        if "model" in p2:
+            # p2 is a python class
+            # self.p2 = p2(self.gateway)
+            model = DQN.load(os.path.join("./checkpoint/dqn_v2", p2))
+            p2 = Opponent(self.gateway, model)
+            self.p2 = p2
+            self.p2_name = self.p2.__class__.__name__
+            self.manager.registerAI(self.p2_name, self.p2)
 
-        if isinstance(p2, str):
+        elif isinstance(p2, str):
             # p2 is a java class name
             self.p2 = p2
             self.p2_name = p2
-        else:
-            # p2 is a python class
-            self.p2 = p2(self.gateway)
-            self.p2_name = self.p2.__class__.__name__
-            self.manager.registerAI(self.p2_name, self.p2)
+        
 
         if random.random() > 0.5:
             self.p1, self.p2 = self.p2, self.p1
@@ -263,7 +274,22 @@ class FightingiceEnv(gymnasium.Env):
         time.sleep(3)
 
     # Add seed and options
-    def reset(self, p2="MctsAi", seed=None, options=None):  # BC P MctsAi
+    def reset(self, p2=None, seed=None, options=None):  # BC P MctsAi
+        # ai_list = os.listdir('data/ai')
+        # ai_list = list(map(lambda x: x.split('.')[0], ai_list))
+        # ai_list = list(filter(lambda x: x != 'RHEA_PI', ai_list))
+        # p2 = random.choice(ai_list)
+        # p2 = "MctsAi"
+        # self.opponent = p2
+        if p2 is None:
+            p2 = self.opponent_pool.choose_opponent()
+        # p2 =
+        self.opponent = p2
+        print("fighting against {}".format(p2), flush=True)
+        # if "model" in p2: # this is a checkpoint
+        #     model = DQN.load(os.path.join("./checkpoint/dqn", p2))
+            # p2 = Opponent
+            
         # start java game if game is not started
         if self.game_started is False:
             try:
@@ -317,7 +343,7 @@ class FightingiceEnv(gymnasium.Env):
             obs = self.pipe.recv()
         else:
             # print("fail in reset and let's do it again.")
-            obs = self.reset()
+            obs, _ = self.reset()
         # BEGIN MY CODE
         # To get the initial frame data
         self.init_frame_data = self.engine.frameData
@@ -333,7 +359,9 @@ class FightingiceEnv(gymnasium.Env):
         if self.game_started is False:
             dicts = {}
             dicts["pre_game_crashed"] = True
-            return self.reset(), 0, None, dicts
+            obs, _ = self.reset()
+            return obs, 0, None, False, dicts
+            # return self.reset(), 0, None, dicts
 
         self.pipe.send(["step", action])
         if self.pipe.poll(60):
@@ -389,14 +417,18 @@ class FightingiceEnv(gymnasium.Env):
 #         return super().reset(p2)
 
 if __name__ == "__main__":
+    # dirs = os.listdir('data/ai')
+    # dirs = list(map(lambda x: x.split('.')[0], dirs))
+    # dirs = list(filter(lambda x: x != 'RHEA_PI', dirs))
+    # print(dirs)
     # env = FightingiceEnv_Data_NoFrameskip()
+    env = FightingiceEnv(OpponentPool())
 
-    # while True:
-    #     obs = env.reset(p2="ReiwaThunder")
-    #     done = False
+    obs = env.reset(p2="model_126976")
+    done = False
 
-    #     while not done:
-    #         new_obs, reward, done, _ = env.step(33)
-    #            new_obs, reward, done, _ = env.step(random.randint(0, 10))
+    while not done:
+        new_obs, reward, done, _, _ = env.step(33)
+            #    new_obs, reward, done, _ = env.step(random.randint(0, 10))
 
     print("finish")

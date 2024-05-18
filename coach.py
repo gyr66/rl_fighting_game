@@ -10,6 +10,7 @@ from fightingice_env import FightingiceEnv
 from model_wrapper import ModelWrapper
 from arena import Arena
 from config import Config
+import numpy as np
 
 
 log = logging.getLogger(__name__)
@@ -29,6 +30,15 @@ class Coach():
         self.mcts = MCTS(self.env, self.model)
         self.trainExamplesHistory = []  # history of examples from Config.numItersForTrainExamplesHistory latest iterations
 
+    def calculate_returns(self, rewards, gamma):
+        R = 0
+        returns = []
+        for r in reversed(rewards):
+            R = r + gamma * R
+            returns.append(R)
+        returns.reverse()
+        return returns
+    
     def executeEpisode(self):
         """
         This function executes one episode of self-play, starting with player 1.
@@ -47,8 +57,11 @@ class Coach():
         """
         trainExamples = []
         frame_data = self.env.init_frame_data
+        self.engine.frameData = frame_data
+        self.engine.pre_framedata = frame_data # To caculate reward
         self.curPlayer = True
         episodeStep = 0
+        player1_return = []
 
         while True:
             episodeStep += 1
@@ -57,18 +70,33 @@ class Coach():
             pi = self.mcts.getActionProb(frame_data, self.curPlayer, temp=temp)
 
             obs = self.engine.get_obs(frame_data, self.curPlayer)
-            trainExamples.append([obs, pi, None])
+            trainExamples.append([obs, self.curPlayer, pi, None])
 
             action = np.random.choice(len(pi), p=pi)
+            # print(f"Player {self.curPlayer} action: {action}")
+
+            opp_obs = self.engine.get_obs(frame_data, not self.curPlayer)
+            opp_action, _ = self.model.predict_action(opp_obs)
+            # print(f"Opponent action: {opp_action}")
 
             # Update frame_data
-            frame_data = self.engine.simulate(frame_data, self.curPlayer,action, None, 60)
+            frame_data = self.engine.simulate(frame_data, self.curPlayer,action, opp_action, Config.simulate_frame)
+            self.engine.frameData = frame_data
+            player1_return.append(self.engine.get_reward(True))
+            self.engine.pre_framedata = frame_data
 
             # Check the game result
-            r = self.engine.check_game_result(frame_data, self.curPlayer)
+            r = self.engine.check_game_result(frame_data, self.curPlayer, Config.game_time_limit)
 
             if r != 0:
-                return [(x[0], x[1], r * ((-1) ** (x[1] != self.curPlayer))) for x in trainExamples]
+                player1_return = self.calculate_returns(player1_return, Config.gamma)
+                print("player1_return[0]")
+                print(player1_return[0])
+                import torch
+                p, v = self.model.forward(torch.FloatTensor(trainExamples[0][0].reshape(1, -1)))
+                print("V value")
+                print(v.item())
+                return [(x[0], x[2], player1_return[idx] * ((-1) ** (x[1] != True))) for idx, x in enumerate(trainExamples)]
             
             # Update the current player
             self.curPlayer = not self.curPlayer
@@ -116,8 +144,19 @@ class Coach():
 
             # arena compare new and old model
             # player 1 is the new model, player 2 is the old model
-            arena = Arena(lambda x: np.argmax(nmcts.getActionProb(x, True, temp=0)),
-                          lambda x: np.argmax(pmcts.getActionProb(x, False, temp=0)), self.env)
+            def player1(x):
+                obs = self.engine.get_obs(x, True)
+                action, _ = self.model.predict_action(obs)
+                return action
+            
+            def player2(x):
+                obs = self.engine.get_obs(x, False)
+                action, _ = self.p_model.predict_action(obs)
+                return action
+            
+            # arena = Arena(lambda x: np.argmax(nmcts.getActionProb(x, True, temp=0)),
+            #               lambda x: np.argmax(pmcts.getActionProb(x, False, temp=0)), self.env)
+            arena = Arena(player1, player2, self.env)
             nwins, pwins, draws = arena.playGames(Config.arenaCompare)
 
             log.info('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))

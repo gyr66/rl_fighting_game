@@ -39,7 +39,7 @@ class ModelWrapper:
     def training(self):
         self.policy.set_training_mode(True)
 
-    def predict(self, data):
+    def predict_action(self, data):
         return self.model.predict(data)
     
     def forward(self, obs: torch.Tensor) -> Tuple[np.ndarray, int]:
@@ -52,7 +52,7 @@ class ModelWrapper:
           latent_vf = self.policy.mlp_extractor.forward_critic(vf_features)
       # Evaluate the values for the given observations
       values = self.policy.value_net(latent_vf) # expected return
-      values = torch.tanh(values) # map values to [-1, 1]
+    #   values = torch.tanh(values) # map values to [-1, 1]
       actions = self.policy.action_net(latent_pi) # logits before softmax
       return actions, values
     

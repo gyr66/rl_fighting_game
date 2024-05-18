@@ -2,6 +2,7 @@ import logging
 
 from tqdm import tqdm
 from fightingice_env import FightingiceEnv
+from config import Config
 
 log = logging.getLogger(__name__)
 
@@ -34,10 +35,11 @@ class Arena():
         while True:
             it += 1
             action = players[curPlayer + 1](frame_data)
-            frame_data = self.engine.simulate(frame_data, curPlayer == 1, action, None, 60)
-            result = self.engine.check_game_result(frame_data, curPlayer == 1) 
+            opp_action = players[-curPlayer + 1](frame_data)
+            frame_data = self.engine.simulate(frame_data, curPlayer == 1, action, opp_action, Config.simulate_frame)
+            result = self.engine.check_game_result(frame_data, True, Config.game_time_limit) # Always at the perspective of player1 
             if result != 0:
-                return curPlayer * result
+                return result
             curPlayer = -curPlayer
 
     def playGames(self, num, verbose=False):

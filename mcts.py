@@ -61,9 +61,17 @@ class MCTS():
         s = self.engine.get_representation(frame_data, player)
         if (s, action) in self.T:
             return self.T[(s, action)]
-        next_frame_data = self.engine.simulate(frame_data, player, action, None, 60)
-        self.T[(s, action)] = next_frame_data
-        return next_frame_data
+        # use the model to predict the opponent's action
+        # self act is based on mcts search
+        # because we want to model to predict the action that is close to the mcts search
+        # the model predict can be used to estimate the opponent's action
+        opp_act, _ = self.model.predict_action(self.engine.get_obs(frame_data, not player))
+        self.engine.pre_framedata = frame_data
+        next_frame_data = self.engine.simulate(frame_data, player, action, opp_act.item(), Config.simulate_frame)
+        self.engine.frameData = next_frame_data
+        reward = self.engine.get_reward(player)
+        self.T[(s, action)] = next_frame_data, reward
+        return self.T[(s, action)]
 
     def search(self, frame_data, player):
         """
@@ -88,10 +96,15 @@ class MCTS():
         s = self.engine.get_representation(frame_data, player)
 
         if s not in self.Es:
-            self.Es[s] = self.engine.check_game_result(frame_data, player)
+            self.Es[s] = self.engine.check_game_result(frame_data, player, Config.game_time_limit)
         if self.Es[s] != 0:
             # terminal node
-            return -self.Es[s]
+            # obs = self.engine.get_obs(frame_data, player)
+            # _, v = self.model.predict(obs)
+            # self.Es[s] = v
+            # return -v
+            # return -self.Es[s]
+            return 0 # Game is ended, expected return is 0
 
         if s not in self.Ps:
             # leaf node
@@ -117,10 +130,11 @@ class MCTS():
 
         a = best_act
 
-        next_frame_data = self.step(frame_data, player, a)
+        next_frame_data, reward = self.step(frame_data, player, a)
         next_player = not player
 
         v = self.search(next_frame_data, next_player)
+        v = reward + Config.gamma * v
 
         if (s, a) in self.Qsa:
             self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (self.Nsa[(s, a)] + 1)

@@ -1,5 +1,6 @@
 import os
 from stable_baselines3.common.callbacks import BaseCallback
+from opponent_pool import OpponentPool
 
 class SaveCallback(BaseCallback):
     """
@@ -9,10 +10,11 @@ class SaveCallback(BaseCallback):
     :param save_dir: (str) Path to the folder where the model will be saved.
     :param verbose: (int)
     """
-    def __init__(self, save_freq: int, save_dir: str, verbose=1):
+    def __init__(self, save_freq: int, save_dir: str, opponent_pool: OpponentPool, verbose=1):
         super(SaveCallback, self).__init__(verbose)
         self.save_freq = save_freq
         self.save_dir = save_dir
+        self.opponent_pool = opponent_pool
 
     def _init_callback(self) -> None:
         # Create folder if needed
@@ -22,5 +24,9 @@ class SaveCallback(BaseCallback):
     def _on_step(self) -> bool:
         if self.n_calls % self.save_freq == 0:
             print(f"Saving model_{self.num_timesteps} checkpoint to {self.save_dir}", flush=True)
-            self.model.save(os.path.join(self.save_dir, f"model_{self.num_timesteps}"))
+            model_name = f"model_{self.num_timesteps}"
+            self.model.save(os.path.join(self.save_dir, model_name))
+            print(f"Adding {model_name} to the opponent pool", flush=True)
+            self.opponent_pool.add_ai(model_name)
+            self.opponent_pool.display_opponent_statistics()
         return True

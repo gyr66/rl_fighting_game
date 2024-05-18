@@ -162,7 +162,11 @@ cython_debug/
 #.idea/
 
 # Custom
-train_error_log.txt
-train_log.txt
+*.txt
+# train_error_log.txt
+# train_log.txt
 log
 *.zip
+# eval_error_log.txt
+# eval_log.txt
+tmp

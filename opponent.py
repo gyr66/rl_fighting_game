@@ -1,11 +1,11 @@
 import numpy as np
-from opponent_pool import Result
+from stable_baselines3.common.base_class import BaseAlgorithm
 
-class GymAI(object):
-    def __init__(self, gateway, pipe, env):
+class Opponent(object):
+    def __init__(self, gateway, model: BaseAlgorithm):
         self.gateway = gateway
-        self.pipe = pipe
-        self.env = env
+        # self.pipe = pipe
+        self.model = model
 
         self.width = 96  # The width of the display to obtain
         self.height = 64  # The height of the display to obtain
@@ -39,17 +39,16 @@ class GymAI(object):
     def roundEnd(self, x, y, z):
         # print("send round end to {}".format(self.pipe))
         # tell gym the round ends
-        if self.player:
-            own_hp, opp_hp = x, y
-        else:
-            own_hp, opp_hp = y, x
-        self.pipe.send([self.obs, 0, True, [own_hp, opp_hp]])
-        if own_hp > opp_hp:
-            strings = "you win"
-        else:
-            strings = "you lose"
-        print("Fighting {}, At the end, own_hp {}: opp_hp {}. {}.".format(self.env.opponent, own_hp, opp_hp, strings), flush=True)
-        self.env.opponent_pool.update_opponent(self.env.opponent, Result(own_hp, opp_hp))
+        # if self.player:
+        #     own_hp, opp_hp = x, y
+        # else:
+        #     own_hp, opp_hp = y, x
+        # self.pipe.send([self.obs, 0, True, [own_hp, opp_hp]])
+        # if own_hp > opp_hp:
+        #     strings = "you win"
+        # else:
+        #     strings = "you lose"
+        # print("At the end, own_hp {}: opp_hp {}. {}.".format(own_hp, opp_hp, strings), flush=True)
         self.just_inited = True
 
         self.obs = None
@@ -112,73 +111,49 @@ class GymAI(object):
 
         ## prepare state for gym policy
         # if just inited, should wait for first reset()
-        if self.just_inited:
-            request = self.pipe.recv()
-            if request == "reset":
-                self.just_inited = False
-                self.obs = self.get_obs(self.frameData, self.player)
-                self.pre_framedata = self.frameData
-                self.pipe.send(self.obs)
-            else:
-                raise ValueError
+        # if self.just_inited:
+        #     request = self.pipe.recv()
+        #     if request == "reset":
+        #         self.just_inited = False
+        #         self.obs = self.get_obs(self.frameData, self.player)
+        #         self.pre_framedata = self.frameData
+        #         self.pipe.send(self.obs)
+        #     else:
+        #         raise ValueError
         # if not just inited but self.obs is none, it means second/thrid round just started
         # should return only obs for reset()
-        elif self.obs is None:
-            self.obs = self.get_obs(self.frameData, self.player)
-            self.pre_framedata = self.frameData
-            self.pipe.send(self.obs)
+        # elif self.obs is None:
+        #     self.obs = self.get_obs(self.frameData, self.player)
+        #     self.pre_framedata = self.frameData
+        #     self.pipe.send(self.obs)
         # if there is self.obs, do step() and return [obs, reward, done, info]
-        else:
-            self.obs = self.get_obs(self.frameData, self.player)
-            self.reward = self.get_reward(self.player)
-            self.pre_framedata = self.frameData
-            own_hp = self.frameData.getCharacter(self.player).getHp()
-            opp_hp = self.frameData.getCharacter(not self.player).getHp()
-            self.pipe.send([self.obs, self.reward, False, [own_hp, opp_hp]])
+        # else:
+        #     self.obs = self.get_obs(self.frameData, self.player)
+        #     self.reward = self.get_reward(self.player)
+        #     self.pre_framedata = self.frameData
+        #     own_hp = self.frameData.getCharacter(self.player).getHp()
+        #     opp_hp = self.frameData.getCharacter(not self.player).getHp()
+        #     self.pipe.send([self.obs, self.reward, False, [own_hp, opp_hp]])
 
         ## receive action from gym
         # print("waitting for step in {}".format(self.pipe))
-        request = self.pipe.recv()
+        # request = self.pipe.recv()
         # print("get step in {}".format(self.pipe))
-        if len(request) == 2 and request[0] == "step":
-            action = request[1]
-            command = self.action_strs[action]
-            if command == "NEUTRAL":
-                self.frozen_frames = 6
-            else:
-                self.frozen_frames = 0
-                if command == "CROUCH_GUARD":
-                    command = "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1"
-                elif command == "STAND_GUARD":
-                    command = "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4"
-                self.cc.commandCall(command)
-                self.inputKey = self.cc.getSkillKey()
-
-    def get_reward(self, player):
-        try:
-            if self.pre_framedata.getEmptyFlag() or self.frameData.getEmptyFlag():
-                reward = 0
-            else:
-                p2_hp_pre = self.pre_framedata.getCharacter(False).getHp()
-                p1_hp_pre = self.pre_framedata.getCharacter(True).getHp()
-                p2_hp_now = self.frameData.getCharacter(False).getHp()
-                p1_hp_now = self.frameData.getCharacter(True).getHp()
-                x_dist_pre = self.pre_framedata.getDistanceX()
-                x_dist_now = self.frameData.getDistanceX()
-                if player:
-                    reward = ((p2_hp_pre - p2_hp_now) - (p1_hp_pre - p1_hp_now)) / 10
-                else:
-                    reward = ((p1_hp_pre - p1_hp_now) - (p2_hp_pre - p2_hp_now)) / 10
-                if x_dist_now < x_dist_pre:
-                    bonus = +0.01
-                elif x_dist_now > x_dist_pre:
-                    bonus = -0.01
-                else:
-                    bonus = 0
-                reward += bonus
-        except:
-            reward = 0
-        return reward
+        obs = self.get_obs(self.frameData, self.player)
+        action, _ = self.model.predict(obs)
+        # if len(request) == 2 and request[0] == "step":
+            # action = request[1]
+        command = self.action_strs[action]
+        if command == "NEUTRAL":
+            self.frozen_frames = 6
+        else:
+            self.frozen_frames = 0
+            if command == "CROUCH_GUARD":
+                command = "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1"
+            elif command == "STAND_GUARD":
+                command = "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4"
+            self.cc.commandCall(command)
+            self.inputKey = self.cc.getSkillKey()
 
     def get_obs(self, frame_data, player, clip=True):
         my = frame_data.getCharacter(player)
@@ -388,132 +363,6 @@ class GymAI(object):
         if clip:
             observation = np.clip(observation, -1, 1)
         return observation
-
-    # BEGIN MY CODE
-    def get_representation(self, frame_data, player):
-        """
-        Get the representation of the state (at frame_data, player (True for player1, False for player2) is about to act)
-        """
-        obs = self.get_obs(frame_data, player, False)
-        obs = np.append(obs, frame_data.getRemainingFramesNumber())
-        return tuple(obs)
-
-    def check_game_result(self, frame_data, player, time_limit=60):
-        if time_limit > 60:
-            raise ValueError("time_limit should be less than 60")
-        if frame_data.getEmptyFlag():
-            return 0
-        if frame_data.getCharacter(player).getHp() <= 0:
-            return -1
-        if frame_data.getCharacter(not player).getHp() <= 0:
-            return 1
-        if frame_data.getRemainingTime() <= 60 - time_limit:
-            print("Simulate to the end of the game:")
-            print("P1 HP: ", frame_data.getCharacter(True).getHp())
-            print("P2 HP: ", frame_data.getCharacter(False).getHp())
-            if (
-                frame_data.getCharacter(player).getHp()
-                > frame_data.getCharacter(not player).getHp()
-            ):
-                return 1
-            # When game ended with draw, return -1
-            return -1
-        return 0
-    
-    def map_action(self, action):
-        command = self.action_strs[action]
-        if command == "AIR_A":
-            return self.gateway.jvm.enumerate.Action.AIR_A
-        elif command == "AIR_B":
-            return self.gateway.jvm.enumerate.Action.AIR_B
-        elif command == "AIR_D_DB_BA":
-            return self.gateway.jvm.enumerate.Action.AIR_D_DB_BA
-        elif command == "AIR_D_DB_BB":
-            return self.gateway.jvm.enumerate.Action.AIR_D_DB_BB
-        elif command == "AIR_D_DF_FA":
-            return self.gateway.jvm.enumerate.Action.AIR_D_DF_FA
-        elif command == "AIR_D_DF_FB":
-            return self.gateway.jvm.enumerate.Action.AIR_D_DF_FB
-        elif command == "AIR_DA":
-            return self.gateway.jvm.enumerate.Action.AIR_DA
-        elif command == "AIR_DB":
-            return self.gateway.jvm.enumerate.Action.AIR_DB
-        elif command == "AIR_F_D_DFA":
-            return self.gateway.jvm.enumerate.Action.AIR_F_D_DFA
-        elif command == "AIR_F_D_DFB":
-            return self.gateway.jvm.enumerate.Action.AIR_F_D_DFB
-        elif command == "AIR_FA":
-            return self.gateway.jvm.enumerate.Action.AIR_FA
-        elif command == "AIR_FB":
-            return self.gateway.jvm.enumerate.Action.AIR_FB
-        elif command == "AIR_UA":
-            return self.gateway.jvm.enumerate.Action.AIR_UA
-        elif command == "AIR_UB":
-            return self.gateway.jvm.enumerate.Action.AIR_UB
-        elif command == "BACK_JUMP":
-            return self.gateway.jvm.enumerate.Action.BACK_JUMP
-        elif command == "BACK_STEP":
-            return self.gateway.jvm.enumerate.Action.BACK_STEP
-        elif command == "CROUCH_A":
-            return self.gateway.jvm.enumerate.Action.CROUCH_A
-        elif command == "CROUCH_B":
-            return self.gateway.jvm.enumerate.Action.CROUCH_B
-        elif command == "CROUCH_FA":
-            return self.gateway.jvm.enumerate.Action.CROUCH_FA
-        elif command == "CROUCH_FB":
-            return self.gateway.jvm.enumerate.Action.CROUCH_FB
-        elif command == "CROUCH_GUARD":
-            return self.gateway.jvm.enumerate.Action.CROUCH_GUARD
-        elif command == "DASH":
-            return self.gateway.jvm.enumerate.Action.DASH
-        elif command == "FOR_JUMP":
-            return self.gateway.jvm.enumerate.Action.FOR_JUMP
-        elif command == "FORWARD_WALK":
-            return self.gateway.jvm.enumerate.Action.FORWARD_WALK
-        elif command == "JUMP":
-            return self.gateway.jvm.enumerate.Action.JUMP
-        elif command == "NEUTRAL":
-            return self.gateway.jvm.enumerate.Action.NEUTRAL
-        elif command == "STAND_A":
-            return self.gateway.jvm.enumerate.Action.STAND_A
-        elif command == "STAND_B":
-            return self.gateway.jvm.enumerate.Action.STAND_B
-        elif command == "STAND_D_DB_BA":
-            return self.gateway.jvm.enumerate.Action.STAND_D_DB_BA
-        elif command == "STAND_D_DB_BB":
-            return self.gateway.jvm.enumerate.Action.STAND_D_DB_BB
-        elif command == "STAND_D_DF_FA":
-            return self.gateway.jvm.enumerate.Action.STAND_D_DF_FA
-        elif command == "STAND_D_DF_FB":
-            return self.gateway.jvm.enumerate.Action.STAND_D_DF_FB
-        elif command == "STAND_D_DF_FC":
-            return self.gateway.jvm.enumerate.Action.STAND_D_DF_FC
-        elif command == "STAND_F_D_DFA":
-            return self.gateway.jvm.enumerate.Action.STAND_F_D_DFA
-        elif command == "STAND_F_D_DFB":
-            return self.gateway.jvm.enumerate.Action.STAND_F_D_DFB
-        elif command == "STAND_FA":
-            return self.gateway.jvm.enumerate.Action.STAND_FA
-        elif command == "STAND_FB":
-            return self.gateway.jvm.enumerate.Action.STAND_FB
-        elif command == "STAND_GUARD":
-            return self.gateway.jvm.enumerate.Action.STAND_GUARD
-        elif command == "THROW_A":
-            return self.gateway.jvm.enumerate.Action.THROW_A
-        elif command == "THROW_B":
-            return self.gateway.jvm.enumerate.Action.THROW_B
-    
-    def get_action(self, action):
-        if action is None:
-            return self.gateway.jvm.java.util.ArrayDeque()
-        command = self.map_action(action)
-        actions = self.gateway.jvm.java.util.ArrayDeque()
-        actions.add(command)
-        return actions
-
-    def simulate(self, frameData, player, action1, action2, frame_number):
-        return self.simulator.simulate(frameData, player, self.get_action(action1), self.get_action(action2), frame_number)
-    # END MY CODE
 
     # This part is mandatory
     class Java:

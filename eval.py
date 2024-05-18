@@ -1,20 +1,17 @@
-import torch
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN
 import argparse
 
 from fightingice_env import FightingiceEnv
+from opponent_pool import OpponentPool
 
-def env_creator():
-    return FightingiceEnv()
 
 def eval(args):
-  env = env_creator()
-  policy_kwargs = dict(activation_fn=torch.nn.ReLU, net_arch=[256, 512])
-  model = PPO("MlpPolicy", env, policy_kwargs=policy_kwargs, verbose=1, n_steps=128, batch_size=64)
-  model.set_parameters(args.checkpoint)
+  env = FightingiceEnv(OpponentPool())
+  
+  model = DQN.load(args.checkpoint, env=env)
 
   for _ in range(args.num_episode):
-    obs, _ = env.reset()
+    obs, _ = env.reset(p2="MctsAi")
     while True:
       action, _ = model.predict(obs)
       obs, reward, done, truncated, _ = env.step(action)
@@ -30,9 +27,4 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   eval(args)
-
-
-
-
-
 

@@ -1,30 +1,31 @@
 import torch
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import SubprocVecEnv
 import os
 import argparse
 
 from fightingice_env import FightingiceEnv
 from callback import SaveCallback
+from opponent_pool import OpponentPool
 
+oppent_pool = OpponentPool()
 
 def env_creator():
-    return FightingiceEnv()
+    return FightingiceEnv(oppent_pool)
 
 
 def main(args):
-    env = make_vec_env(env_creator, n_envs=args.num_env, vec_env_cls=SubprocVecEnv)
-    eval_env = make_vec_env(env_creator, n_envs=1, vec_env_cls=SubprocVecEnv)
-    policy_kwargs = dict(activation_fn=torch.nn.ReLU, net_arch=[256, 512])
-    model = PPO(
+    env = make_vec_env(env_creator, n_envs=args.num_env)
+    eval_env = make_vec_env(env_creator, n_envs=1)
+    policy_kwargs = dict(activation_fn=torch.nn.ReLU, net_arch=[256, 512, 128])
+    model = DQN(
         "MlpPolicy",
         env,
         policy_kwargs=policy_kwargs,
         verbose=1,
-        n_steps=args.n_steps,
+        gradient_steps=5,
         batch_size=args.batch_size,
     )
     if args.load_model is not None:
@@ -42,25 +43,24 @@ def main(args):
         render=False,
     )
 
-    save_callback = SaveCallback(save_freq=1000, save_dir=args.save_path)
+    save_callback = SaveCallback(save_freq=args.save_freq, save_dir=args.save_path, opponent_pool=oppent_pool)
 
     print("num envs: ", model.n_envs, flush=True)
     model.learn(
         total_timesteps=args.total_timesteps, log_interval=1, callback=[eval_callback, save_callback]
     )
-    model.save(os.path.join(args.save_path, f"ppo_{args.total_timesteps}"))
+    model.save(os.path.join(args.save_path, f"dqn_{args.total_timesteps}"))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_env", type=int, default=8)
-    parser.add_argument("--n_steps", type=int, default=128)
+    parser.add_argument("--num_env", type=int, default=16)
     parser.add_argument("--eval_freq", type=int, default=128)
     parser.add_argument("--save_freq", type=int, default=512)
     parser.add_argument("--total_timesteps", type=int, default=100000)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--load_model", type=str, default=None)
-    parser.add_argument("--save_path", type=str, default="./checkpoint/ppo")
+    parser.add_argument("--save_path", type=str, default="./checkpoint/dqn")
     parser.add_argument("--log_path", type=str, default="./sb3_log")
 
     args = parser.parse_args()
