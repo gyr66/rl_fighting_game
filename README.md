@@ -20,6 +20,14 @@ Change the arguments in train_ppo.sh
 bash train_ppo.sh
 ```
 
+## Train DQN
+
+Change the arguments in train_dqn.sh
+
+```sh
+bash train_dqn.sh
+```
+
 ## Train MCTS
 
 Modify Config.py
