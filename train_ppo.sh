@@ -1,2 +1,2 @@
 export DISPLAY=:10
-python ppo.py --num_env 4 --n_steps 128 --eval_freq 128 --save_freq 512 --total_timesteps 100000 --batch_size 64 --load_model ./checkpoint/ppo/best_model.zip --save_path ./checkpoint/ppo --log_path ./sb3_log > train_log.txt 2> train_error_log.txt
+python ppo.py --num_env 1 --n_steps 2048 --eval_freq 2048 --save_freq 2048 --total_timesteps 1000000 --batch_size 64 --load_model ./checkpoint/ppo/best_model.zip --save_path ./checkpoint/ppo --log_path ./sb3_log > train_log.txt 2> train_error_log.txt

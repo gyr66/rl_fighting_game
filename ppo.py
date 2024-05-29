@@ -3,7 +3,6 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import SubprocVecEnv
 import os
 import argparse
 
@@ -16,11 +15,11 @@ def env_creator():
 
 
 def main(args):
-    env = make_vec_env(env_creator, n_envs=args.num_env, vec_env_cls=SubprocVecEnv)
-    eval_env = make_vec_env(env_creator, n_envs=1, vec_env_cls=SubprocVecEnv)
+    env = make_vec_env(env_creator, n_envs=args.num_env)
+    eval_env = make_vec_env(env_creator, n_envs=1)
     if args.load_model is not None:
         print("Loading model from: ", args.load_model, flush=True)
-        model = PPO.load(args.load_model, env=env)
+        model = PPO.load(args.load_model, env=env, verbose=1, n_steps=args.n_steps, batch_size=args.batch_size)
     else:
         policy_kwargs = dict(activation_fn=torch.nn.ReLU, net_arch=[256, 512])
         model = PPO(
@@ -65,5 +64,7 @@ if __name__ == "__main__":
     parser.add_argument("--log_path", type=str, default="./sb3_log")
 
     args = parser.parse_args()
+    
+    print(args, flush=True)
 
     main(args)
