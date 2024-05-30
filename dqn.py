@@ -3,6 +3,7 @@ from stable_baselines3 import DQN
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import SubprocVecEnv
 import os
 import argparse
 
@@ -10,27 +11,27 @@ from fightingice_env import FightingiceEnv
 from callback import SaveCallback
 from opponent_pool import OpponentPool
 
-oppent_pool = OpponentPool()
 
 def env_creator():
+    oppent_pool = OpponentPool()
     return FightingiceEnv(oppent_pool)
 
 
 def main(args):
-    env = make_vec_env(env_creator, n_envs=args.num_env)
-    eval_env = make_vec_env(env_creator, n_envs=1)
-    policy_kwargs = dict(activation_fn=torch.nn.ReLU, net_arch=[256, 512, 128])
-    model = DQN(
-        "MlpPolicy",
-        env,
-        policy_kwargs=policy_kwargs,
-        verbose=1,
-        gradient_steps=5,
-        batch_size=args.batch_size,
-    )
+    env = make_vec_env(env_creator, n_envs=args.num_env, vec_env_cls=SubprocVecEnv)
+    eval_env = make_vec_env(env_creator, n_envs=1, vec_env_cls=SubprocVecEnv)
     if args.load_model is not None:
         print("Loading model from: ", args.load_model, flush=True)
-        model.set_parameters(args.load_model)
+        model = DQN.load(args.load_model, env=env, verbose=1, batch_size=args.batch_size, exploration_initial_eps=0.1) # Set the exploration_initial_eps to 0.1
+    else:
+        policy_kwargs = dict(activation_fn=torch.nn.ReLU, net_arch=[256, 512, 128])
+        model = DQN(
+            "MlpPolicy",
+            env,
+            policy_kwargs=policy_kwargs,
+            verbose=1,
+            batch_size=args.batch_size,
+        )
     logger = configure(args.log_path, ["stdout", "csv"])
     model.set_logger(logger)
 
@@ -43,7 +44,7 @@ def main(args):
         render=False,
     )
 
-    save_callback = SaveCallback(save_freq=args.save_freq, save_dir=args.save_path, opponent_pool=oppent_pool)
+    save_callback = SaveCallback(save_freq=args.save_freq, save_dir=args.save_path)
 
     print("num envs: ", model.n_envs, flush=True)
     model.learn(

@@ -44,7 +44,7 @@ class OpponentPool:
   def __init__(self) -> None:
     builtin_ai = os.listdir('data/ai')
     builtin_ai = list(map(lambda x: x.split('.')[0], builtin_ai))
-    builtin_ai = list(filter(lambda x: x != 'RHEA_PI', builtin_ai)) # make the REHA_PI the final boss to test, we don't learn from it
+    builtin_ai = list(filter(lambda x: x not in ['RHEA_PI', 'MuryFajarAI', 'Machete', 'PunchAI', 'MogakuMono', 'ReiwaThunder'], builtin_ai)) # make the REHA_PI the final boss to test, we don't learn from it
     self.opponents: Dict[str, OpponentStatistic] = {} # the stats of all the opponents
     for ai in builtin_ai:
       self.opponents[ai] = OpponentStatistic() # intialize the stats of the opponent
@@ -56,13 +56,14 @@ class OpponentPool:
     self.opponents[ai].update(result)
   
   def choose_opponent(self) -> str:
-    if random.random() < 0.7:
-      scores = np.array([opponent.score for opponent in self.opponents.values()])
-      exp_scores = np.exp(scores - np.max(scores))
-      probs = exp_scores / np.sum(exp_scores)
-      chosen_opponent = np.random.choice(list(self.opponents.keys()), p=probs)
+    if random.random() < 0.3:
+      chosen_opponent = random.choice(list(self.opponents.keys()))
+      # scores = np.array([opponent.score for opponent in self.opponents.values()])
+      # exp_scores = np.exp(scores - np.max(scores))
+      # probs = exp_scores / np.sum(exp_scores)
+      # chosen_opponent = np.random.choice(list(self.opponents.keys()), p=probs)
     else:
-      chosen_opponent = random.choice(list(self.opponents.keys()))  
+      chosen_opponent = "MctsAi"  # Modify to focus on MctsAi
     return chosen_opponent
   
   def display_opponent_statistics(self):
