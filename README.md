@@ -43,3 +43,7 @@ Change the arguments in eval.sh
 ```sh
 bash eval.sh
 ```
+
+## Demo
+
+[video](./demo.mp4)
